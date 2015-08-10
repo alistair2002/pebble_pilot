@@ -1,0 +1,18 @@
+{
+  "uuid": "424decad-838a-4ce8-be10-ad5ce75f551a",
+  "shortName": "pilot",
+  "longName": "pebble pilot",
+  "companyName": "atalanta owners",
+  "versionLabel": "1.0",
+  "sdkVersion": "3",
+  "targetPlatforms": ["aplite", "basalt"],
+  "watchapp": {
+    "watchface": false
+  },
+  "appKeys": {
+    "dummy": 0
+  },
+  "resources": {
+    "media": []
+  }
+}
