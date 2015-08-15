@@ -1,10 +1,12 @@
 #include <pebble.h>
 
 static Window *window;
-static TextLayer *text_layer;
 static TextLayer *heading_layer;
 static TextLayer *wanted_layer;
-static TextLayer *speed_layer;
+static Layer *speed_layer;
+
+static char speed_buffer[16] = {0};
+static char value_buffer[16] = {0};
 
 static void send(int key, int value) {
   DictionaryIterator *iter;
@@ -21,7 +23,7 @@ static void outbox_sent_handler(DictionaryIterator *iter, void *context) {
 }
 
 static void outbox_failed_handler(DictionaryIterator *iter, AppMessageResult reason, void *context) {
-  text_layer_set_text(text_layer, "Send failed!");
+  text_layer_set_text(heading_layer, "Send failed!");
   APP_LOG(APP_LOG_LEVEL_ERROR, "Fail reason: %d", (int)reason);
 }
 
@@ -31,9 +33,8 @@ static void received_handler(DictionaryIterator *iter, void *context) {
 	while(t != NULL) {
 
 		if (t->key == 0) {
-			static char value_buffer[16] = {0};
 			snprintf(value_buffer, sizeof(value_buffer), "%d", (int)t->value->int32);
-			text_layer_set_text(text_layer, value_buffer);
+			layer_mark_dirty(speed_layer);
 
 		} else if (t->key == 1) { /* what */
 			static char wanted_buffer[16] = {0};
@@ -57,11 +58,8 @@ static void received_handler(DictionaryIterator *iter, void *context) {
 					break;
 			}
 		} else if (t->key == 3) { /* speed */
-
-			static char speed_buffer[16] = {0};
 			snprintf(speed_buffer, sizeof(speed_buffer), "%d", (int)t->value->int32);
-			text_layer_set_text(speed_layer, speed_buffer);
-			
+			layer_mark_dirty(speed_layer);
 		}
 		// Finally
 		t = dict_read_next(iter);
@@ -69,17 +67,14 @@ static void received_handler(DictionaryIterator *iter, void *context) {
 }
 
 static void select_click_handler(ClickRecognizerRef recognizer, void *context) {
-  text_layer_set_text(text_layer, "Select");
   send(0, 3);
 }
 
 static void up_click_handler(ClickRecognizerRef recognizer, void *context) {
-  text_layer_set_text(text_layer, "Up");
   send(0, 1);
 }
 
 static void down_click_handler(ClickRecognizerRef recognizer, void *context) {
-  text_layer_set_text(text_layer, "Down");
   send(0, 2);
 }
 
@@ -89,36 +84,58 @@ static void click_config_provider(void *context) {
   window_single_click_subscribe(BUTTON_ID_DOWN, down_click_handler);
 }
 
-/* static void speed_update_proc(Layer *this_layer, GContext *ctx) { */
-/*   // Draw things here using ctx */
-/*   GRect bounds = layer_get_bounds(this_layer); */
-/*   GRect frame = GRect(5, 5, bounds.size.w, 18 + 2); */
+static void speed_update_proc(Layer *this_layer, GContext *ctx) {
+  // Draw things here using ctx
+  GRect bounds = layer_get_bounds(this_layer);
 
-/*   graphics_context_set_text_color(ctx, GColorWhite); */
-/*   graphics_draw_text(ctx,  */
-/*     "Hello World", */
-/*     fonts_get_system_font(FONT_KEY_GOTHIC_18_BOLD), */
-/*     frame, */
-/*     GTextOverflowModeTrailingEllipsis, */
-/*     GTextAlignmentCenter, */
-/*     NULL */
-/*   ); */
-/* } */
+  GRect frame_speed = GRect(3, 10, 50, 50);
+  GRect frame_value = GRect(30, 38, 110, 110);
+
+  GPoint little_centre = GPoint(30, 30);
+
+  graphics_fill_rect( ctx, bounds, 0, 0 );
+
+  graphics_context_set_fill_color(ctx, GColorWhite);
+  graphics_fill_circle(ctx, little_centre, 30);
+
+  graphics_context_set_fill_color(ctx, GColorBlack);
+  graphics_fill_circle(ctx, little_centre, 27);
+
+  graphics_context_set_fill_color(ctx, GColorWhite);
+  graphics_fill_circle(ctx, GPoint(85, 70), 55);
+
+  graphics_context_set_text_color(ctx, GColorWhite);
+  graphics_draw_text(ctx,
+					 speed_buffer,
+					 fonts_get_system_font(FONT_KEY_BITHAM_30_BLACK),
+					 frame_speed,
+					 GTextOverflowModeTrailingEllipsis,
+					 GTextAlignmentCenter,
+					 NULL
+	  );
+
+  graphics_context_set_text_color(ctx, GColorBlack);
+  graphics_draw_text(ctx,
+					 value_buffer,
+					 fonts_get_system_font(FONT_KEY_ROBOTO_BOLD_SUBSET_49),
+					 frame_value,
+					 GTextOverflowModeTrailingEllipsis,
+					 GTextAlignmentCenter,
+					 NULL
+	  );
+}
 
 static void window_load(Window *window) {
   Layer *window_layer = window_get_root_layer(window);
   GRect bounds = layer_get_bounds(window_layer);
 
-  heading_layer = text_layer_create((GRect) { .origin = { 0, 0 }, .size = { bounds.size.w, 24 } });
-  wanted_layer = text_layer_create((GRect) { .origin = { bounds.size.w/2, 24 }, .size = { bounds.size.w/2, 48 } });
-  speed_layer = text_layer_create((GRect) { .origin = { 0, 24 }, .size = { bounds.size.w/2, 48 } });
-  text_layer = text_layer_create((GRect) { .origin = { 0, 72 }, .size = { bounds.size.w, bounds.size.h - 72 } });
+  heading_layer = text_layer_create((GRect) { .origin = { 0, 0 }, .size = { 100, 24 } });
+  wanted_layer = text_layer_create((GRect) { .origin = { 100, 0 }, .size = { bounds.size.w-100, 24 } });
+  speed_layer = layer_create((GRect) { .origin = { 0, 24 }, .size = { bounds.size.w, bounds.size.h-24 } });
 	  
   // Update the font and text for the demo message
   text_layer_set_font(heading_layer, fonts_get_system_font(FONT_KEY_ROBOTO_CONDENSED_21));
   text_layer_set_font(wanted_layer, fonts_get_system_font(FONT_KEY_ROBOTO_CONDENSED_21));
-  text_layer_set_font(speed_layer, fonts_get_system_font(FONT_KEY_ROBOTO_CONDENSED_21));
-  text_layer_set_font(text_layer, fonts_get_system_font(FONT_KEY_ROBOTO_BOLD_SUBSET_49));
 
   text_layer_set_text(heading_layer, "Compass");
   text_layer_set_text_alignment(heading_layer, GTextAlignmentLeft);
@@ -132,23 +149,14 @@ static void window_load(Window *window) {
   text_layer_set_background_color( wanted_layer, GColorBlack );
   text_layer_set_text_color( wanted_layer, GColorWhite );
 
-  text_layer_set_text(speed_layer, "0");
-  text_layer_set_text_alignment(speed_layer, GTextAlignmentCenter);
-  layer_add_child(window_layer, text_layer_get_layer(speed_layer));
-  text_layer_set_background_color( speed_layer, GColorBlack );
-  text_layer_set_text_color( speed_layer, GColorWhite );
-  /* layer_set_update_proc(speed_layer, speed_update_proc); */
-
-  text_layer_set_text(text_layer, "0");
-  text_layer_set_text_alignment(text_layer, GTextAlignmentCenter);
-  layer_add_child(window_layer, text_layer_get_layer(text_layer));
+  layer_add_child(window_layer, speed_layer);
+  layer_set_update_proc(speed_layer, speed_update_proc);
 }
 
 static void window_unload(Window *window) {
   text_layer_destroy(heading_layer);
   text_layer_destroy(wanted_layer);
-  text_layer_destroy(speed_layer);
-  text_layer_destroy(text_layer);
+  layer_destroy(speed_layer);
 }
 
 static void init(void) {
