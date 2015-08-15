@@ -4,6 +4,7 @@ static Window *window;
 static TextLayer *text_layer;
 static TextLayer *heading_layer;
 static TextLayer *wanted_layer;
+static TextLayer *speed_layer;
 
 static void send(int key, int value) {
   DictionaryIterator *iter;
@@ -55,7 +56,13 @@ static void received_handler(DictionaryIterator *iter, void *context) {
 					text_layer_set_text(heading_layer, "COG");
 					break;
 			}
-		} 
+		} else if (t->key == 3) { /* speed */
+
+			static char speed_buffer[16] = {0};
+			snprintf(speed_buffer, sizeof(speed_buffer), "%d", (int)t->value->int32);
+			text_layer_set_text(speed_layer, speed_buffer);
+			
+		}
 		// Finally
 		t = dict_read_next(iter);
 	}
@@ -82,17 +89,35 @@ static void click_config_provider(void *context) {
   window_single_click_subscribe(BUTTON_ID_DOWN, down_click_handler);
 }
 
+/* static void speed_update_proc(Layer *this_layer, GContext *ctx) { */
+/*   // Draw things here using ctx */
+/*   GRect bounds = layer_get_bounds(this_layer); */
+/*   GRect frame = GRect(5, 5, bounds.size.w, 18 + 2); */
+
+/*   graphics_context_set_text_color(ctx, GColorWhite); */
+/*   graphics_draw_text(ctx,  */
+/*     "Hello World", */
+/*     fonts_get_system_font(FONT_KEY_GOTHIC_18_BOLD), */
+/*     frame, */
+/*     GTextOverflowModeTrailingEllipsis, */
+/*     GTextAlignmentCenter, */
+/*     NULL */
+/*   ); */
+/* } */
+
 static void window_load(Window *window) {
   Layer *window_layer = window_get_root_layer(window);
   GRect bounds = layer_get_bounds(window_layer);
 
   heading_layer = text_layer_create((GRect) { .origin = { 0, 0 }, .size = { bounds.size.w, 24 } });
-  wanted_layer = text_layer_create((GRect) { .origin = { 0, 24 }, .size = { bounds.size.w, 35 } });
+  wanted_layer = text_layer_create((GRect) { .origin = { bounds.size.w/2, 24 }, .size = { bounds.size.w/2, 48 } });
+  speed_layer = text_layer_create((GRect) { .origin = { 0, 24 }, .size = { bounds.size.w/2, 48 } });
   text_layer = text_layer_create((GRect) { .origin = { 0, 72 }, .size = { bounds.size.w, bounds.size.h - 72 } });
 	  
   // Update the font and text for the demo message
   text_layer_set_font(heading_layer, fonts_get_system_font(FONT_KEY_ROBOTO_CONDENSED_21));
   text_layer_set_font(wanted_layer, fonts_get_system_font(FONT_KEY_ROBOTO_CONDENSED_21));
+  text_layer_set_font(speed_layer, fonts_get_system_font(FONT_KEY_ROBOTO_CONDENSED_21));
   text_layer_set_font(text_layer, fonts_get_system_font(FONT_KEY_ROBOTO_BOLD_SUBSET_49));
 
   text_layer_set_text(heading_layer, "Compass");
@@ -102,10 +127,17 @@ static void window_load(Window *window) {
   text_layer_set_text_color( heading_layer, GColorWhite );
 
   text_layer_set_text(wanted_layer, "0");
-  text_layer_set_text_alignment(wanted_layer, GTextAlignmentRight);
+  text_layer_set_text_alignment(wanted_layer, GTextAlignmentCenter);
   layer_add_child(window_layer, text_layer_get_layer(wanted_layer));
   text_layer_set_background_color( wanted_layer, GColorBlack );
   text_layer_set_text_color( wanted_layer, GColorWhite );
+
+  text_layer_set_text(speed_layer, "0");
+  text_layer_set_text_alignment(speed_layer, GTextAlignmentCenter);
+  layer_add_child(window_layer, text_layer_get_layer(speed_layer));
+  text_layer_set_background_color( speed_layer, GColorBlack );
+  text_layer_set_text_color( speed_layer, GColorWhite );
+  /* layer_set_update_proc(speed_layer, speed_update_proc); */
 
   text_layer_set_text(text_layer, "0");
   text_layer_set_text_alignment(text_layer, GTextAlignmentCenter);
@@ -115,6 +147,7 @@ static void window_load(Window *window) {
 static void window_unload(Window *window) {
   text_layer_destroy(heading_layer);
   text_layer_destroy(wanted_layer);
+  text_layer_destroy(speed_layer);
   text_layer_destroy(text_layer);
 }
 
