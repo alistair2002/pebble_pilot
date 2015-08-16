@@ -7,6 +7,18 @@ static Layer *speed_layer;
 
 static char speed_buffer[16] = {0};
 static char value_buffer[16] = {0};
+static char rudder_buffer[16] = {0};
+static char cog_buffer[16] = {0};
+
+typedef enum {
+	ctrl_off,
+	ctrl_compass,
+	ctrl_rudder,
+	ctrl_cog
+} pid_ctrl_t;
+
+static pid_ctrl_t ctrl_control = ctrl_cog;
+static pid_ctrl_t ctrl_view = ctrl_compass;
 
 static void send(int key, int value) {
   DictionaryIterator *iter;
@@ -29,13 +41,13 @@ static void outbox_failed_handler(DictionaryIterator *iter, AppMessageResult rea
 
 static void received_handler(DictionaryIterator *iter, void *context) {
 	Tuple *t = dict_read_first(iter);
+	bool dirty = false;
 							
 	while(t != NULL) {
 
 		if (t->key == 0) {
 			snprintf(value_buffer, sizeof(value_buffer), "%d", (int)t->value->int32);
-			layer_mark_dirty(speed_layer);
-
+			dirty = true;
 		} else if (t->key == 1) { /* what */
 			static char wanted_buffer[16] = {0};
 			snprintf(wanted_buffer, sizeof(wanted_buffer), "%d", (int)t->value->int32);
@@ -45,29 +57,51 @@ static void received_handler(DictionaryIterator *iter, void *context) {
 			switch (t->value->int32)
 			{
 				case 0:
-					text_layer_set_text(heading_layer, "Off");
+					ctrl_control = ctrl_off;
+					//text_layer_set_text(heading_layer, "Off");
 					break;
 				case 1:
-					text_layer_set_text(heading_layer, "Rudder");
+					ctrl_control = ctrl_rudder;
+					//text_layer_set_text(heading_layer, "Rudder");
 					break;
 				case 2:
-					text_layer_set_text(heading_layer, "Compass");
+					ctrl_control = ctrl_compass;
+					//text_layer_set_text(heading_layer, "Compass");
 					break;
 				default:
-					text_layer_set_text(heading_layer, "COG");
+					ctrl_control = ctrl_cog;
+					//text_layer_set_text(heading_layer, "COG");
 					break;
 			}
 		} else if (t->key == 3) { /* speed */
-			snprintf(speed_buffer, sizeof(speed_buffer), "%d", (int)t->value->int32);
-			layer_mark_dirty(speed_layer);
+			snprintf(speed_buffer, sizeof(speed_buffer), "%d.%d", (int)t->value->int32/10, (int)t->value->int32%10);
+			dirty = true;
+
+		}else if (t->key == 4) { /* rudder */
+			snprintf(rudder_buffer, sizeof(rudder_buffer), "%d", (int)t->value->int32);
+			dirty = true;
+			
+		}else if (t->key == 5) { /* course over ground */
+			snprintf(cog_buffer, sizeof(cog_buffer), "%d", (int)t->value->int32);
+			dirty = true;
 		}
 		// Finally
 		t = dict_read_next(iter);
 	}
+
+	if (dirty)
+	{
+		layer_mark_dirty(speed_layer);
+	}
 }
 
 static void select_click_handler(ClickRecognizerRef recognizer, void *context) {
-  send(0, 3);
+	//send(0, 3);
+	if (ctrl_compass == ctrl_view) { ctrl_view = ctrl_rudder; }
+	else if (ctrl_rudder == ctrl_view) { ctrl_view = ctrl_cog; }
+	else /* if (ctrl_cog == ctrl_view)*/ { ctrl_view = ctrl_compass; } /* don't check as we should be one of the three */
+
+	layer_mark_dirty(speed_layer);
 }
 
 static void up_click_handler(ClickRecognizerRef recognizer, void *context) {
@@ -88,10 +122,14 @@ static void speed_update_proc(Layer *this_layer, GContext *ctx) {
   // Draw things here using ctx
   GRect bounds = layer_get_bounds(this_layer);
 
-  GRect frame_speed = GRect(3, 10, 50, 50);
+  GRect frame_speed = GRect(4, 12, 50, 50);
   GRect frame_value = GRect(30, 38, 110, 110);
 
   GPoint little_centre = GPoint(30, 30);
+  GPoint compass_centre = GPoint(85, 10);
+  GPoint rudder_centre = GPoint(112, 16);
+  GPoint cog_centre = GPoint(133, 33);
+  static char* p_value = value_buffer;
 
   graphics_fill_rect( ctx, bounds, 0, 0 );
 
@@ -104,10 +142,45 @@ static void speed_update_proc(Layer *this_layer, GContext *ctx) {
   graphics_context_set_fill_color(ctx, GColorWhite);
   graphics_fill_circle(ctx, GPoint(85, 70), 55);
 
+  graphics_context_set_stroke_color(ctx, GColorWhite);
+  
+  switch (ctrl_view)
+  {
+	  case ctrl_compass:
+		  graphics_fill_circle(ctx, compass_centre, 6);
+		  p_value = value_buffer;
+		  break;
+	  case ctrl_rudder:
+		  graphics_fill_circle(ctx, rudder_centre, 6);
+		  p_value = rudder_buffer;
+		  break;
+	  case ctrl_cog:
+		  graphics_fill_circle(ctx, cog_centre, 6);
+		  p_value = cog_buffer;
+		  break;
+	  default:
+		  break;
+  }
+
+  switch (ctrl_control)
+  {
+	  case ctrl_compass:
+		  graphics_draw_circle(ctx, compass_centre, 9);
+		  break;
+	  case ctrl_rudder:
+		  graphics_draw_circle(ctx, rudder_centre, 9);
+		  break;
+	  case ctrl_cog:
+		  graphics_draw_circle(ctx, cog_centre, 9);
+		  break;
+	  default:
+		  break;
+  }
+  
   graphics_context_set_text_color(ctx, GColorWhite);
   graphics_draw_text(ctx,
 					 speed_buffer,
-					 fonts_get_system_font(FONT_KEY_BITHAM_30_BLACK),
+					 fonts_get_system_font(FONT_KEY_GOTHIC_24_BOLD),
 					 frame_speed,
 					 GTextOverflowModeTrailingEllipsis,
 					 GTextAlignmentCenter,
@@ -116,7 +189,7 @@ static void speed_update_proc(Layer *this_layer, GContext *ctx) {
 
   graphics_context_set_text_color(ctx, GColorBlack);
   graphics_draw_text(ctx,
-					 value_buffer,
+					 p_value,
 					 fonts_get_system_font(FONT_KEY_ROBOTO_BOLD_SUBSET_49),
 					 frame_value,
 					 GTextOverflowModeTrailingEllipsis,
@@ -137,7 +210,7 @@ static void window_load(Window *window) {
   text_layer_set_font(heading_layer, fonts_get_system_font(FONT_KEY_ROBOTO_CONDENSED_21));
   text_layer_set_font(wanted_layer, fonts_get_system_font(FONT_KEY_ROBOTO_CONDENSED_21));
 
-  text_layer_set_text(heading_layer, "Compass");
+  //text_layer_set_text(heading_layer, "");
   text_layer_set_text_alignment(heading_layer, GTextAlignmentLeft);
   layer_add_child(window_layer, text_layer_get_layer(heading_layer));
   text_layer_set_background_color( heading_layer, GColorBlack );
