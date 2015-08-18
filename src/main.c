@@ -187,6 +187,13 @@ static void speed_update_proc(Layer *this_layer, GContext *ctx) {
 					 NULL
 	  );
 
+  /* if the value is negative we will have to draw the line our selves
+	 the fonts do not contain negative values */
+  if ((p_value) && ('-' == *p_value)) {
+	  graphics_context_set_fill_color(ctx, GColorBlack);
+	  graphics_fill_rect( ctx, GRect(40, 70, 15, 5), 1, 0x0F);
+  }
+  
   graphics_context_set_text_color(ctx, GColorBlack);
   graphics_draw_text(ctx,
 					 p_value,
